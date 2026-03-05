@@ -44,6 +44,17 @@
   </asset>
 
   <worldbody>
+    <body name="platform" mocap="true" pos="0 0 0" quat="1 0 0 0">
+      <geom name="platform_geom"
+        type="box"
+        size="2 2 0.05"
+        pos="0 0 -0.05"
+        friction="1 0.005 0.0001"
+        contype="1" conaffinity="1"
+        rgba="0.6 0.6 0.6 1"/>
+
+    </body>
+    
     <body name="pelvis" pos="0 0 0.793">
       <inertial pos="0 0 -0.07605" quat="1 0 -0.000399148 0" mass="3.813" diaginertia="0.010549 0.0093089 0.0079184"/>
       <joint name="floating_base_joint" type="free" limited="false" actuatorfrclimited="false"/>
@@ -300,6 +311,6 @@
   </asset>
   <worldbody>
     <light pos="1 0 3.5" dir="0 0 -1" directional="true"/>
-    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="groundplane" contype="0" conaffinity="0"/>
   </worldbody>
 </mujoco>

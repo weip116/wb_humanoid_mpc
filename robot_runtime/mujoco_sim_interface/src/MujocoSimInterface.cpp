@@ -32,6 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cerrno>
 #include <cstring>
 #include <stdexcept>
+#include <array>
 
 namespace robot::mujoco_sim_interface {
 
@@ -364,6 +365,83 @@ void MujocoSimInterface::simulationStep() {
   }
 
   mujocoMutex_.lock();
+
+  // ---------------------------
+  // Platform mocap motion test:
+  // ax=0.5, ay=0.2, az=0.1 (m/s^2)
+  // Integrate v and p each sim step, write to d->mocap_pos
+  // ---------------------------
+  {
+    static bool platform_inited = false;
+    static int platform_body_id = -1;
+    static int platform_mocap_id = -1;
+
+    // State for integration (world frame)
+    static mjtNum platform_pos[3] = {0, 0, 0};
+    static mjtNum platform_vel[3] = {0, 0, 0};
+
+    if (!platform_inited) {
+      platform_body_id = mj_name2id(mujocoModel_, mjOBJ_BODY, "platform");
+      if (platform_body_id < 0) {
+        std::cerr << "[PlatformTest] cannot find body named 'platform' in XML." << std::endl;
+      } else {
+        platform_mocap_id = mujocoModel_->body_mocapid[platform_body_id];
+        if (platform_mocap_id < 0) {
+          std::cerr << "[PlatformTest] body 'platform' is NOT mocap (body_mocapid<0). "
+                       "Please set mocap=\"true\" in XML."
+                    << std::endl;
+        } else {
+          // Initialize from current mocap position if available
+          platform_pos[0] = mujocoData_->mocap_pos[3 * platform_mocap_id + 0];
+          platform_pos[1] = mujocoData_->mocap_pos[3 * platform_mocap_id + 1];
+          platform_pos[2] = mujocoData_->mocap_pos[3 * platform_mocap_id + 2];
+
+          // Optionally set initial orientation identity
+          mujocoData_->mocap_quat[4 * platform_mocap_id + 0] = 1;
+          mujocoData_->mocap_quat[4 * platform_mocap_id + 1] = 0;
+          mujocoData_->mocap_quat[4 * platform_mocap_id + 2] = 0;
+          mujocoData_->mocap_quat[4 * platform_mocap_id + 3] = 0;
+
+          std::cerr << "[PlatformTest] mocap platform found. body_id=" << platform_body_id
+                    << ", mocap_id=" << platform_mocap_id
+                    << ", init_pos=(" << platform_pos[0] << ", " << platform_pos[1] << ", " << platform_pos[2] << ")"
+                    << std::endl;
+        }
+      }
+      platform_inited = true;
+    }
+
+    if (platform_mocap_id >= 0) {
+      const mjtNum dt = mujocoModel_->opt.timestep;
+
+      // Constant acceleration test (replace with CSV later)
+      const mjtNum ax = 0.5;
+      const mjtNum ay = 0.2;
+      const mjtNum az = 0.1;
+
+      platform_vel[0] += ax * dt;
+      platform_vel[1] += ay * dt;
+      platform_vel[2] += az * dt;
+
+      platform_pos[0] += platform_vel[0] * dt;
+      platform_pos[1] += platform_vel[1] * dt;
+      platform_pos[2] += platform_vel[2] * dt;
+
+      mujocoData_->mocap_pos[3 * platform_mocap_id + 0] = platform_pos[0];
+      mujocoData_->mocap_pos[3 * platform_mocap_id + 1] = platform_pos[1];
+      mujocoData_->mocap_pos[3 * platform_mocap_id + 2] = platform_pos[2];
+
+      // 如果你想确认它在动，可以每 1s 打一次
+      // （别每步都打，会刷屏拖慢）
+      static int print_counter = 0;
+      if (++print_counter % static_cast<int>(1.0 / dt) == 0) {
+        std::cerr << "[PlatformTest] pos=(" << platform_pos[0] << ", " << platform_pos[1] << ", " << platform_pos[2]
+                  << "), vel=(" << platform_vel[0] << ", " << platform_vel[1] << ", " << platform_vel[2] << ")"
+                  << std::endl;
+      }
+    }
+  }
+
   mj_step(mujocoModel_, mujocoData_);
   updateThreadSafeRobotState();
   updateMetrics();
